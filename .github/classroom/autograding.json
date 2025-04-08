@@ -1,0 +1,188 @@
+{
+  "tests": [
+    {
+      "name": "1. Verificação Inicial do Django",
+      "setup": "pip install -r requirements.txt",
+      "run": "python manage.py check",
+      "timeout": 10,
+      "points": 3
+    },
+    {
+      "name": "2. Teste de Migrações",
+      "run": "python manage.py makemigrations --check --dry-run",
+      "output": "No changes detected",
+      "timeout": 10,
+      "points": 3
+    },
+
+
+    {
+      "name": "3. Teste Model Médico - Criação Válida",
+      "run": "python manage.py shell -c \"from clinica.models import Medico; m = Medico(nome='Dr. Valido', especialidade='CAR', crm='12/34567'); m.full_clean(); print('VALID')\"",
+      "output": "VALID",
+      "timeout": 15,
+      "points": 4
+    },
+    {
+      "name": "4. Teste Model Médico - CRM Inválido",
+      "run": "python manage.py shell -c \"from clinica.models import Medico; from django.core.exceptions import ValidationError; m = Medico(nome='Dr. Valido', especialidade='CAR', crm='1234567', email='dr@example.com'); exec('try:\\n m.full_clean()\\n print(\\\"ERRO: CRM inválido foi aceito\\\")\\nexcept ValidationError:\\n print(\\\"SUCESSO: CRM inválido foi rejeitado como esperado\\\")')\"",
+      "output": "SUCESSO: CRM inválido foi rejeitado como esperado",
+      "timeout": 15,
+      "points": 4
+    },
+
+    {
+      "name": "5. Teste GET /medicos/ - Sucesso (200)",
+      "run": "python manage.py shell -c \"from django.test import Client; print('PASS' if Client().get('/medicos/').status_code == 200 else 'FAIL')\"",
+      "output": "PASS",
+      "timeout": 10,
+      "points": 4
+    },
+    {
+      "name": "6. Teste GET /medicos/999/ - Não Encontrado (404)",
+      "run": "python manage.py shell -c \"from django.test import Client; print('PASS' if Client().get('/medicos/999/').status_code == 404 else 'FAIL')\"",
+      "output": "PASS",
+      "timeout": 10,
+      "points": 4
+    },
+
+    {
+      "name": "7. Teste POST /consultas/nova/ - Dados Válidos (200)",
+      "run": "python manage.py shell -c \"from django.test import Client; from clinica.models import Medico; Medico.objects.create(nome='Dr. Teste', especialidade='CAR', crm='12/34567'); r = Client().post('/consultas/nova/', {'medico':1, 'paciente':'Paciente', 'data':'2025-01-01 10:00', 'status':'agendado'}); print('PASS' if r.status_code == 200 else 'FAIL')\"",
+      "output": "PASS",
+      "timeout": 15,
+      "points": 6
+    },
+
+    {
+      "name": "9. Teste Template - Mensagem de Erro",
+      "run": "python -c \"with open('clinica/templates/clinica/form_consulta.html') as f: c = f.read(); print('VALID' if 'error' in c or 'erró' in c or 'erro' in c else 'INVALID')\"",
+      "output": "VALID",
+      "timeout": 5,
+      "points": 3
+    },
+
+
+    {
+      "name": "10. Teste URL Inexistente (404)",
+      "run": "python manage.py shell -c \"from django.test import Client; print('PASS' if Client().get('/url-inexistente/').status_code == 404 else 'FAIL')\"",
+      "output": "PASS",
+      "timeout": 10,
+      "points": 3
+    },
+
+
+    {
+      "name": "11. Análise Pylint - Médico",
+      "setup": "pip install pylint-django",
+      "run": "pylint --load-plugins pylint_django clinica/models.py --exit-zero --disable=C0114,C0115,C0116,W0613,R0903",
+      "timeout": 20,
+      "points": 6
+    },
+    {
+      "name": "12. Teste Model Servico - Criação Válida",
+      "run": "python manage.py shell -c \"from agenda.models import Servico; s = Servico(nome='Massagem', duracao=60, preco=150.00); s.full_clean(); print('VALID')\"",
+      "output": "VALID",
+      "timeout": 15,
+      "points": 4
+    },
+    {
+      "name": "13. Teste POST Serviço - Sucesso",
+      "run": "python manage.py shell -c \"from django.test import Client; import json; r = Client().post('/api/servicos/', json.dumps({'nome':'Limpeza', 'duracao':30, 'preco':100.00}), content_type='application/json'); print('PASS' if r.status_code == 201 and 'id' in str(r.content) else 'FAIL')\"",
+      "output": "PASS",
+      "timeout": 15,
+      "points": 5
+    },
+    {
+      "name": "14. Teste POST Serviço - Dados Inválidos",
+      "run": "python manage.py shell -c \"from django.test import Client; import json; r = Client().post('/api/servicos/', json.dumps({\\\"nome\\\": \\\"\\\", \\\"duracao\\\": \\\"abc\\\", \\\"preco\\\": -100}), content_type='application/json'); print('PASS' if r.status_code == 400 and 'nome' in str(r.content) and 'duracao' in str(r.content) else 'FAIL')\"",
+      "output": "PASS",
+      "timeout": 15,
+      "points": 5
+    },
+    {
+      "name": "15. Teste GET Serviços - Lista Vazia",
+      "run": "python manage.py shell -c \"from django.test import Client; from agenda.models import Servico; Servico.objects.all().delete(); r = Client().get('/api/servicos/'); print('PASS' if r.status_code == 200 and r.content == b'[]' else f'FAIL {r.content}')\"",
+      "output": "PASS",
+      "timeout": 15,
+      "points": 4
+    },
+    {
+      "name": "16. Teste POST Agendamento - Sucesso",
+      "run": "python manage.py shell -c \"from django.test import Client; import json; from django.utils import timezone; from agenda.models import Servico; Servico.objects.all().delete(); servico = Servico.objects.create(nome='Consulta', duracao=30, preco=200.00); data_futura = (timezone.now() + timezone.timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%SZ'); r = Client().post('/api/agendamentos/', json.dumps({'servico': servico.pk, 'data_hora': data_futura, 'cliente_nome': 'Maria', 'cliente_email': 'maria@teste.com'}), content_type='application/json'); print('PASS' if r.status_code == 201 and 'id' in str(r.content) else f'FAIL {r.content}')\"",
+      "output": "PASS",
+      "timeout": 20,
+      "points": 6
+    },
+    {
+      "name": "17. Teste GET Agendamento - Detalhe",
+      "run": "python manage.py shell -c \"from django.test import Client; from agenda.models import Servico, Agendamento; from django.utils import timezone; Servico.objects.all().delete(); Agendamento.objects.all().delete(); s = Servico.objects.create(nome='Exame', duracao=45, preco=300.00); data_futura = timezone.now() + timezone.timedelta(days=2); a = Agendamento.objects.create(servico=s, data_hora=data_futura, cliente_nome='Ana', cliente_email='ana@teste.com'); r = Client().get(f'/api/agendamentos/{a.id}/'); print('PASS' if r.status_code == 200 and f'\\\"servico\\\":{s.id}' in str(r.content) and 'Ana' in str(r.content) else f'FAIL {r.content} \\\"servico\\\": {s.id}')\"",
+      "output": "PASS",
+      "timeout": 20,
+      "points": 6
+    },
+    {
+      "name": "18. Teste GET Serviço - Não Existente",
+      "run": "python manage.py shell -c \"from django.test import Client; r = Client().get('/api/servicos/999/'); print('PASS' if r.status_code == 404 else 'FAIL')\"",
+      "output": "PASS",
+      "timeout": 15,
+      "points": 4
+    },
+    {
+      "name": "19. Teste Registro - Sucesso",
+      "run": "python manage.py shell -c \"from django.test import Client; import json; r = Client().post('/auth/register/', json.dumps({'username':'testuser1', 'password':'ValidPass123!', 'phone':'+5511999999999'}), content_type='application/json'); print('PASS' if r.status_code == 201 and 'message' in str(r.content) else 'FAIL')\"",
+      "output": "PASS",
+      "timeout": 15,
+      "points": 4
+  },
+  {
+      "name": "20 Teste Registro - Senha Fraca",
+      "run": "python manage.py shell -c \"from django.test import Client; import json; r = Client().post('/auth/register/', json.dumps({'username':'testuser2', 'password':'weak', 'phone':'+5511888888888'}), content_type='application/json'); print('PASS' if r.status_code == 400 and 'password' in str(r.content) else 'FAIL')\"",
+      "output": "PASS",
+      "timeout": 15,
+      "points": 4
+  },
+  {
+      "name": "22. Teste Login - Sucesso",
+      "run": "python manage.py shell -c \"from django.test import Client; import json; from custom_auth.models import CustomUser; CustomUser.objects.create_user(username='testuser4', password='ValidPass123!', phone='+5511777777777'); r = Client().post('/auth/login/', json.dumps({'username':'testuser4', 'password':'ValidPass123!'}), content_type='application/json'); print('PASS' if r.status_code == 200 and 'access' in str(r.content) and 'refresh' in str(r.content) else 'FAIL')\"",
+      "output": "PASS",
+      "timeout": 15,
+      "points": 4
+  },
+  {
+      "name": "23. Teste Login - Credenciais Inválidas",
+      "run": "python manage.py shell -c \"from django.test import Client; import json; r = Client().post('/auth/login/', json.dumps({'username':'nonexistent', 'password':'wrong'}), content_type='application/json'); print('PASS' if r.status_code == 401 else 'FAIL')\"",
+      "output": "PASS",
+      "timeout": 15,
+      "points": 4
+  },
+  {
+      "name": "24. Teste Perfil - Acesso Não Autorizado",
+      "run": "python manage.py shell -c \"from django.test import Client; r = Client().get('/auth/profile/'); print('PASS' if r.status_code == 401 else 'FAIL')\"",
+      "output": "PASS",
+      "timeout": 10,
+      "points": 4
+  },
+  {
+      "name": "25. Teste Perfil - Acesso Autorizado",
+      "run": "python manage.py shell -c \"from django.test import Client; import json; from custom_auth.models import CustomUser; from rest_framework_simplejwt.tokens import AccessToken; user = CustomUser.objects.create_user(username='testuser7', password='ValidPass123!', phone='+5511666666666'); token = AccessToken.for_user(user); r = Client().get('/auth/profile/', HTTP_AUTHORIZATION=f'Bearer {token}'); print('PASS' if r.status_code == 200 and 'username' in str(r.content) and 'phone' in str(r.content) else 'FAIL')\"",
+      "output": "PASS",
+      "timeout": 20,
+      "points": 6
+  },
+  {
+      "name": "26. Teste Atualização Perfil - Sucesso",
+      "run": "python manage.py shell -c \"from django.test import Client; import json; from custom_auth.models import CustomUser; from rest_framework_simplejwt.tokens import AccessToken; user = CustomUser.objects.create_user(username='testuser8', password='ValidPass123!', phone='+5511555555555'); token = AccessToken.for_user(user); r = Client().patch('/auth/profile/', json.dumps({'address':'123 Main St'}), content_type='application/json', HTTP_AUTHORIZATION=f'Bearer {token}'); print('PASS' if r.status_code == 200 and '123 Main St' in str(r.content) else 'FAIL')\"",
+      "output": "PASS",
+      "timeout": 20,
+      "points": 6
+  },
+  {
+      "name": "28. Teste Token Refresh",
+      "run": "python manage.py shell -c \"from django.test import Client; import json; from custom_auth.models import CustomUser; from rest_framework_simplejwt.tokens import RefreshToken; user = CustomUser.objects.create_user(username='testuser10', password='ValidPass123!', phone='+5511333333333'); refresh = RefreshToken.for_user(user); r = Client().post('/auth/token/refresh/', json.dumps({'refresh':str(refresh)}), content_type='application/json'); print('PASS' if r.status_code == 200 and 'access' in str(r.content) else 'FAIL')\"",
+      "output": "PASS",
+      "timeout": 20,
+      "points": 6
+  }
+  ]
+}
